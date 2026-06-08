@@ -1,0 +1,10 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/cases/[id]/arbitration/page": "app/cases/[id]/arbitration/page.js",
+  "/cases/[id]/drafting/page": "app/cases/[id]/drafting/page.js",
+  "/cases/[id]/efiling/page": "app/cases/[id]/efiling/page.js",
+  "/cases/new/page": "app/cases/new/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/page": "app/page.js"
+}
