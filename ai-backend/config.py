@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     OLLAMA_HOST: str = "http://localhost:11434"
     DEFAULT_LLM_MODEL: str = "gemini-1.5-flash"
     EMBEDDING_MODEL: str = "gemini-embedding-001"
+    VDB_PERSIST_DIR: str = '/docs/'
 
     # LangSmith / Observability
     LANGCHAIN_TRACING_V2: str = "false"
