@@ -47,6 +47,6 @@ next-env.d.ts
 *.pdf
 __pycache__/
 .pyc
-
+.venv/
 
 *.jsonl
