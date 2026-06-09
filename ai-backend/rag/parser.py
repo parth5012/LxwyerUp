@@ -1,5 +1,7 @@
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+
+from langchain_core.documents import Document
 
 
 class JudgmentParser:
@@ -87,8 +89,47 @@ class JudgmentParser:
 
     def extract_case_id(self, metadata: Dict[str, Any]) -> str:
         """Generate unique case ID from metadata."""
-        case_no = metadata.get("case_id", "").replace("/", "_").replace(" ", "_")
+        case_no_value = metadata.get("case_id")
+        case_no = (
+            str(case_no_value).replace("/", "_").replace(" ", "_")
+            if case_no_value
+            else ""
+        )
         year = metadata.get("year", "unknown")
         if case_no:
             return f"{year}_{case_no}"
-        return f"{year}_{hash(metadata.get('case_name', ''))}"
+        return f"{year}_{hash(metadata.get('case_name', '') or '')}"
+
+    def create_document(
+        self,
+        text: str,
+        source: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Document:
+        """Create a LangChain Document from judgment text and metadata."""
+        base_metadata = self.extract_metadata(text)
+        merged_metadata = {**base_metadata}
+        if metadata:
+            merged_metadata.update(metadata)
+        if source:
+            merged_metadata["source"] = source
+
+        return Document(page_content=text.strip(), metadata=merged_metadata)
+
+    def create_documents(
+        self,
+        texts: List[str],
+        source: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[Document]:
+        """Create LangChain Documents for a list of judgment text segments."""
+        documents: List[Document] = []
+        for index, segment_text in enumerate(texts):
+            segment_metadata = {**(metadata or {})}
+            segment_metadata["segment_index"] = index
+            documents.append(
+                self.create_document(
+                    segment_text, source=source, metadata=segment_metadata
+                )
+            )
+        return documents

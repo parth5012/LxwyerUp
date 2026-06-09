@@ -1,10 +1,9 @@
 from typing import List
 import nltk
+from langchain_core.documents import Document
 from nltk.tokenize import sent_tokenize
-from rag.schema import JudgmentChunk,logger
+from rag.schema import JudgmentChunk, logger
 from rag.parser import JudgmentParser
-
-
 
 
 # Download NLTK data if not already present
@@ -15,7 +14,6 @@ except LookupError:
 
 
 class JudgmentChunker:
-
     """Chunks judgment text into semantically meaningful pieces."""
 
     def __init__(
@@ -41,26 +39,38 @@ class JudgmentChunker:
         """Rough estimation of token count (word count / 1.3)."""
         return len(text.split()) // 1
 
-    def chunk_judgment(self, judgment_text: str) -> List[JudgmentChunk]:
+    def chunk_judgment(self, judgment_source: str | Document) -> List[JudgmentChunk]:
         """
         Chunk a judgment into semantically meaningful pieces.
 
+        Args:
+            judgment_source: raw judgment text or a LangChain Document.
+
         Strategy:
         1. Extract metadata from header
-        2. Split into sentences
-        3. Group sentences into chunks based on token count
-        4. Preserve section boundaries
+        2. Merge metadata from the Document if present
+        3. Split into sentences
+        4. Group sentences into chunks based on token count
+        5. Preserve section boundaries
         """
-        # Extract metadata
-        metadata = self.parser.extract_metadata(judgment_text)
+        if isinstance(judgment_source, Document):
+            text = judgment_source.page_content
+            metadata = {
+                **self.parser.extract_metadata(judgment_source.page_content),
+                **(judgment_source.metadata or {}),
+            }
+        else:
+            text = judgment_source
+            metadata = self.parser.extract_metadata(text)
+
         case_id = self.parser.extract_case_id(metadata)
 
         # Split into sentences
         try:
-            sentences = sent_tokenize(judgment_text)
+            sentences = sent_tokenize(text)
         except Exception as e:
             logger.warning(f"Error tokenizing judgment {case_id}: {e}")
-            sentences = judgment_text.split(".")
+            sentences = text.split(".")
 
         chunks = []
         current_chunk = []
@@ -134,4 +144,15 @@ class JudgmentChunker:
                 )
                 chunks.append(chunk)
 
+        return chunks
+
+    def chunk_document(self, document: Document) -> List[JudgmentChunk]:
+        """Chunk a single LangChain Document."""
+        return self.chunk_judgment(document)
+
+    def chunk_documents(self, documents: List[Document]) -> List[JudgmentChunk]:
+        """Chunk a list of LangChain Documents."""
+        chunks: List[JudgmentChunk] = []
+        for document in documents:
+            chunks.extend(self.chunk_document(document))
         return chunks

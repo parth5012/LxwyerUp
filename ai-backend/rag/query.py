@@ -34,7 +34,9 @@ logger = logging.getLogger("app.rag")
 #     }
 # ]
 
-LEGAL_GROUND_TRUTH =  []
+LEGAL_GROUND_TRUTH = []
+
+
 def query_vector_db(query: str, limit: int = 2) -> List[Dict[str, Any]]:
     """
     Simulates a Vector Database query.
@@ -45,40 +47,49 @@ def query_vector_db(query: str, limit: int = 2) -> List[Dict[str, Any]]:
         return []
 
     # If Gemini is configured, simulate embeddings-based retrieval
-    if settings.GEMINI_API_KEY:
+    if settings.GOOGLE_API_KEY:
         try:
             from langchain_google_genai import GoogleGenAIEmbeddings
-            embeddings = GoogleGenAIEmbeddings(model="models/embedding-001", google_api_key=settings.GEMINI_API_KEY)
-            
+
+            embeddings = GoogleGenAIEmbeddings(
+                model="models/embedding-001", google_api_key=settings.GOOGLE_API_KEY
+            )
+
             # Embed the query
             query_vector = np.array(embeddings.embed_query(query))
-            
+
             # Embed the ground truths (normally cached or pre-indexed)
             scored_clauses = []
             for doc in LEGAL_GROUND_TRUTH:
                 doc_vector = np.array(embeddings.embed_query(doc["content"]))
-                
+
                 # Cosine similarity
                 dot_product = np.dot(query_vector, doc_vector)
                 norm_q = np.linalg.norm(query_vector)
                 norm_d = np.linalg.norm(doc_vector)
-                similarity = dot_product / (norm_q * norm_d) if norm_q > 0 and norm_d > 0 else 0.0
-                
+                similarity = (
+                    dot_product / (norm_q * norm_d)
+                    if norm_q > 0 and norm_d > 0
+                    else 0.0
+                )
+
                 scored_clauses.append((similarity, doc))
-                
+
             scored_clauses.sort(key=lambda x: x[0], reverse=True)
             return [item[1] for item in scored_clauses[:limit]]
         except Exception as e:
-            logger.error(f"Error querying Gemini embeddings: {e}. Falling back to keyword search.")
+            logger.error(
+                f"Error querying Gemini embeddings: {e}. Falling back to keyword search."
+            )
 
     # Fallback keyword matching (TF-like scoring based on word intersection)
     query_words = set(query.lower().split())
     scored_clauses = []
-    
+
     for doc in LEGAL_GROUND_TRUTH:
         doc_words = set(doc["content"].lower().split() + doc["title"].lower().split())
         score = len(query_words.intersection(doc_words))
         scored_clauses.append((score, doc))
-        
+
     scored_clauses.sort(key=lambda x: x[0], reverse=True)
     return [item[1] for item in scored_clauses[:limit]]

@@ -5,14 +5,9 @@ Extracts judgment text, creates semantic chunks, and preserves metadata.
 
 import json
 from pathlib import Path
-from typing import Generator, Dict, Any
+from typing import Generator, Dict, Any, Optional
 from rag.chunker import JudgmentChunker
 from rag.schema import logger, JudgmentChunk
-
-
-
-
-
 
 
 class JudgmentDataLoader:
@@ -34,29 +29,50 @@ class JudgmentDataLoader:
             max_chunk_tokens=max_chunk_tokens, overlap_tokens=overlap_tokens
         )
 
-    def load_judgments(self) -> Generator[Dict, None, None]:
+    def load_judgments(
+        self,
+        start_index: int = 0,
+        max_judgments: Optional[int] = None,
+    ) -> Generator[Dict, None, None]:
         """
         Load judgments from JSONL file.
+
+        Args:
+            start_index: number of judgments to skip before returning results
+            max_judgments: maximum number of judgments to return after start_index
 
         Yields: Dict with 'messages' key containing list of message objects
         """
         if not self.jsonl_path.exists():
             raise FileNotFoundError(f"File not found: {self.jsonl_path}")
 
-        logger.info(f"Starting to load judgments from {self.jsonl_path}")
+        logger.info(
+            f"Starting to load judgments from {self.jsonl_path} "
+            f"(skip={start_index}, max={max_judgments})"
+        )
 
+        loaded = 0
+        yielded = 0
         with open(self.jsonl_path, "r", encoding="utf-8") as f:
             for line_num, line in enumerate(f, 1):
                 try:
                     judgment_obj = json.loads(line)
-                    yield judgment_obj
-
-                    if line_num % 10000 == 0:
-                        logger.info(f"Loaded {line_num} judgments")
-
                 except json.JSONDecodeError as e:
                     logger.warning(f"Error parsing JSON at line {line_num}: {e}")
                     continue
+
+                loaded += 1
+                if loaded <= start_index:
+                    continue
+
+                yield judgment_obj
+                yielded += 1
+
+                if yielded % 10000 == 0:
+                    logger.info(f"Loaded {yielded} judgments after skip")
+
+                if max_judgments is not None and yielded >= max_judgments:
+                    break
 
     def extract_assistant_content(self, judgment_obj: Dict) -> str:
         """Extract assistant message content from judgment object."""
@@ -66,16 +82,26 @@ class JudgmentDataLoader:
                 return msg.get("content", "")
         return ""
 
-    def load_and_chunk(self) -> Generator[JudgmentChunk, None, None]:
+    def load_and_chunk(
+        self,
+        start_index: int = 0,
+        max_judgments: Optional[int] = None,
+    ) -> Generator[JudgmentChunk, None, None]:
         """
         Load judgments and yield individual chunks.
+
+        Args:
+            start_index: number of judgments to skip before chunking starts
+            max_judgments: maximum number of judgments to chunk after start_index
 
         Yields: JudgmentChunk objects
         """
         judgment_count = 0
         chunk_count = 0
 
-        for judgment_obj in self.load_judgments():
+        for judgment_obj in self.load_judgments(
+            start_index=start_index, max_judgments=max_judgments
+        ):
             judgment_text = self.extract_assistant_content(judgment_obj)
 
             if not judgment_text:
