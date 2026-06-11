@@ -134,6 +134,31 @@ cd ai-backend
 .venv\Scripts\celery -A app.tasks.celery_app worker --loglevel=info
 ```
 
+### 4. RAG Chunk Export & Gemini Embedding Workflow
+If you are building the RAG vector store from a large corpus, use the offline chunk export and batch embedding commands in `ai-backend/rag/setup_vdb.py`.
+
+1. Export chunked documents once:
+
+```bash
+cd ai-backend
+.venv\Scripts\activate
+python -m rag.setup_vdb export-chunks ..\judgments_only.jsonl chunked_docs.jsonl
+```
+
+2. Embed saved chunks in controlled batches:
+
+```bash
+python -m rag.setup_vdb embed-chunks chunked_docs.jsonl --batch-size 16 --throttle-seconds 1.5 --persist-directory chroma_store --progress-file embed_progress.txt
+```
+
+3. Resume embedding later if interrupted:
+
+```bash
+python -m rag.setup_vdb embed-chunks chunked_docs.jsonl --batch-size 16 --throttle-seconds 1.5 --persist-directory chroma_store --progress-file embed_progress.txt --resume
+```
+
+This lets you avoid rate limit spikes and continue from the last processed chunk without re-doing previous work.
+
 ---
 
 ## 🧪 Simulation & Testing
