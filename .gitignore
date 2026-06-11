@@ -52,3 +52,6 @@ __pycache__/
 .venv/
 
 *.jsonl
+*.sqlite3
+embed_progress.txt
+*/chroma_store/

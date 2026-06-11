@@ -1,0 +1,10 @@
+[project]
+name = "lxwyerup"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-chroma>=1.1.0",
+    "nltk>=3.9.4",
+]
