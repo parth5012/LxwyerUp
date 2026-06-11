@@ -3,12 +3,37 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator, Optional, Any
 
 # Ensure the ai-backend package root is on sys.path so rag imports work
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+
+def clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Remove invalid empty metadata values before sending to Chroma."""
+    cleaned = {}
+    for key, value in metadata.items():
+        if value is None:
+            continue
+        if isinstance(value, list):
+            normalized = [
+                item
+                for item in value
+                if item is not None
+                and not (isinstance(item, str) and item.strip() == "")
+            ]
+            if normalized:
+                cleaned[key] = normalized
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                cleaned[key] = value
+            continue
+        cleaned[key] = value
+    return cleaned
+
 
 from langchain_chroma.vectorstores import Chroma
 from langchain_core.documents import Document
@@ -23,7 +48,7 @@ throttle Gemini requests, resume after interruptions, and avoid hitting
 rate limits.
 
 Example usage:
-  python -m rag.setup_vdb export-chunks ..\judgments_only.jsonl chunked_docs.jsonl
+  python -m rag.setup_vdb export-chunks ../judgments_only.jsonl chunked_docs.jsonl
   python -m rag.setup_vdb embed-chunks chunked_docs.jsonl --batch-size 16 --throttle-seconds 1.5 --progress-file embed_progress.txt --persist-directory chroma_store
   python -m rag.setup_vdb embed-chunks chunked_docs.jsonl --batch-size 16 --progress-file embed_progress.txt --resume
 """
@@ -52,6 +77,9 @@ def build_collection_from_jsonl(
         "embedding_function": embedding,
     }
     if persist_directory:
+        # `langchain_chroma.Chroma` uses a PersistentClient automatically
+        # when `persist_directory` is provided. There is no explicit
+        # `persist()` method to call on the store itself.
         chroma_kwargs["persist_directory"] = persist_directory
 
     vdb = Chroma(**chroma_kwargs)
@@ -63,18 +91,20 @@ def build_collection_from_jsonl(
         batch_documents.append(
             parser.create_document(
                 chunk.content,
-                metadata={
-                    "case_id": chunk.case_id,
-                    "case_name": chunk.case_name,
-                    "year": chunk.year,
-                    "chunk_index": chunk.chunk_index,
-                    "section_type": chunk.section_type,
-                    "bench": chunk.bench,
-                    "petitioner": chunk.parties["petitioner"],
-                    "respondent": chunk.parties["respondent"],
-                    "citations": chunk.citations,
-                    "judges": chunk.judges,
-                },
+                metadata=clean_metadata(
+                    {
+                        "case_id": chunk.case_id,
+                        "case_name": chunk.case_name,
+                        "year": chunk.year,
+                        "chunk_index": chunk.chunk_index,
+                        "section_type": chunk.section_type,
+                        "bench": chunk.bench,
+                        "petitioner": chunk.parties["petitioner"],
+                        "respondent": chunk.parties["respondent"],
+                        "citations": chunk.citations,
+                        "judges": chunk.judges,
+                    }
+                ),
             )
         )
         chunk_count += 1
@@ -88,9 +118,6 @@ def build_collection_from_jsonl(
 
     if chunk_count == 0:
         raise ValueError(f"No documents were created from {jsonl_path}")
-
-    if persist_directory:
-        vdb.persist()
 
     return vdb, chunk_count
 
@@ -117,18 +144,20 @@ def export_chunked_documents(
         ):
             doc = parser.create_document(
                 chunk.content,
-                metadata={
-                    "case_id": chunk.case_id,
-                    "case_name": chunk.case_name,
-                    "year": chunk.year,
-                    "chunk_index": chunk.chunk_index,
-                    "section_type": chunk.section_type,
-                    "bench": chunk.bench,
-                    "petitioner": chunk.parties["petitioner"],
-                    "respondent": chunk.parties["respondent"],
-                    "citations": chunk.citations,
-                    "judges": chunk.judges,
-                },
+                metadata=clean_metadata(
+                    {
+                        "case_id": chunk.case_id,
+                        "case_name": chunk.case_name,
+                        "year": chunk.year,
+                        "chunk_index": chunk.chunk_index,
+                        "section_type": chunk.section_type,
+                        "bench": chunk.bench,
+                        "petitioner": chunk.parties["petitioner"],
+                        "respondent": chunk.parties["respondent"],
+                        "citations": chunk.citations,
+                        "judges": chunk.judges,
+                    }
+                ),
             )
             out_file.write(
                 json.dumps({"content": doc.page_content, "metadata": doc.metadata})
@@ -156,7 +185,8 @@ def read_chunked_documents(
 
             data = json.loads(line)
             yield Document(
-                page_content=data["content"], metadata=data.get("metadata", {})
+                page_content=data["content"],
+                metadata=clean_metadata(data.get("metadata", {})),
             )
             loaded += 1
 
@@ -198,6 +228,9 @@ def embed_chunked_documents(
         "embedding_function": embedding,
     }
     if persist_directory:
+        # `langchain_chroma.Chroma` uses a PersistentClient automatically
+        # when `persist_directory` is provided. There is no explicit
+        # `persist()` method to call on the store itself.
         chroma_kwargs["persist_directory"] = persist_directory
 
     vdb = Chroma(**chroma_kwargs)
@@ -216,8 +249,6 @@ def embed_chunked_documents(
 
         if len(batch_documents) >= batch_size:
             vdb.add_documents(batch_documents)
-            if persist_directory:
-                vdb.persist()
             if progress_file:
                 write_progress(progress_file, current_index)
             batch_documents = []
@@ -226,13 +257,8 @@ def embed_chunked_documents(
 
     if batch_documents:
         vdb.add_documents(batch_documents)
-        if persist_directory:
-            vdb.persist()
         if progress_file:
             write_progress(progress_file, current_index)
-
-    if persist_directory:
-        vdb.persist()
 
     return vdb, embedded
 
