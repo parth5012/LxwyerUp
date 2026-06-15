@@ -55,3 +55,6 @@ __pycache__/
 *.sqlite3
 embed_progress.txt
 */chroma_store/
+
+
+.antigravitycli
