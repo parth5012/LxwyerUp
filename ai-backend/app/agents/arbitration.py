@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from app.agents.state import AgentState
 from app.agents.llm import get_llm
-from app.rag import query_vector_db
+from rag.query import query_vector_db
 from langchain_core.messages import AIMessage, HumanMessage
 
 def run_arbitration_agent(state: AgentState) -> Dict[str, Any]:
@@ -13,7 +13,7 @@ def run_arbitration_agent(state: AgentState) -> Dict[str, Any]:
     if not messages:
         return {"agent_output": "Error: No input messages in state."}
 
-    user_query = messages[-1].content
+    user_query = str(messages[-1].content)
     
     # 1. Retrieve relevant arbitration rules / legal ground truth
     context_docs = query_vector_db(user_query, limit=2)

@@ -1,3 +1,4 @@
+import os
 from langgraph.graph import StateGraph, START, END
 from app.agents.state import AgentState
 from app.agents.supervisor import run_supervisor
@@ -49,3 +50,14 @@ workflow.add_edge("efiling", END)
 
 # Final Compiled Agentic Graph
 compiled_graph = workflow.compile()
+
+
+
+if __name__ == "__main__":
+    
+    # Assuming 'graph' is your compiled StateGraph
+    png_data = compiled_graph.get_graph().draw_mermaid_png()
+    
+    # Save the binary data as a PNG image file
+    with open("langgraph_architecture.png", "wb") as f:
+        f.write(png_data)
